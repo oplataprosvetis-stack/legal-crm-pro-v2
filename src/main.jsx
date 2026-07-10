@@ -7,13 +7,11 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Clock3,
-  Coffee,
   Database,
   Download,
-  Flame,
   GripVertical,
   MessageCircle,
+  Pause,
   Play,
   Plus,
   Save,
@@ -105,6 +103,9 @@ const EMPTY_CATEGORY_FORM = { title: '', partyType: 'person', owner: '', deadlin
 const DEMO_STORAGE_KEY = 'lcrm-v2-demo';
 const CATEGORIES_STORAGE_KEY = 'lcrm-categories';
 const TG_STORAGE_KEY = 'lcrm-tg';
+const BUCKET_EMOJI = { hot: '🔥', warm: '🌡️', cool: '😎', empty: '·' };
+const DEMO_AUTOPLAY_STEPS = 20;
+const DEMO_AUTOPLAY_INTERVAL = 5000;
 
 function daysAgo(value) {
   return new Date(Date.now() - 86400000 * value).toISOString();
@@ -506,12 +507,30 @@ function App() {
   const [tgStatus, setTgStatus] = React.useState('idle');
   const [now, setNow] = React.useState(Date.now());
   const [agendaDayFilter, setAgendaDayFilter] = React.useState(null);
+  const [demoPlaying, setDemoPlaying] = React.useState(false);
+  const [demoStep, setDemoStep] = React.useState(0);
+  const [demoSendStatus, setDemoSendStatus] = React.useState(true);
+  const [demoSendTasks, setDemoSendTasks] = React.useState(false);
+  const runDemoScenarioRef = React.useRef(() => {});
   const phoneRef = React.useRef(null);
 
   React.useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  React.useEffect(() => {
+    if (!demoPlaying) return;
+    if (demoStep >= DEMO_AUTOPLAY_STEPS) {
+      setDemoPlaying(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      runDemoScenarioRef.current();
+      setDemoStep(step => step + 1);
+    }, DEMO_AUTOPLAY_INTERVAL);
+    return () => clearTimeout(timer);
+  }, [demoPlaying, demoStep]);
 
   React.useEffect(() => {
     let ignore = false;
@@ -593,14 +612,15 @@ function App() {
     });
   }, [agendaItems, agendaDayFilter]);
   const agendaGroups = React.useMemo(() => ([
-    { key: 'hot', label: 'Горит', icon: Flame, items: visibleAgendaItems.filter(item => item.bucket === 'hot') },
-    { key: 'warm', label: 'Подгорает', icon: Clock3, items: visibleAgendaItems.filter(item => item.bucket === 'warm') },
-    { key: 'cool', label: 'На чилле', icon: Coffee, items: visibleAgendaItems.filter(item => item.bucket === 'cool') },
+    { key: 'hot', label: 'Горит', emoji: BUCKET_EMOJI.hot, items: visibleAgendaItems.filter(item => item.bucket === 'hot') },
+    { key: 'warm', label: 'Подгорает', emoji: BUCKET_EMOJI.warm, items: visibleAgendaItems.filter(item => item.bucket === 'warm') },
+    { key: 'cool', label: 'На чилле', emoji: BUCKET_EMOJI.cool, items: visibleAgendaItems.filter(item => item.bucket === 'cool') },
   ]), [visibleAgendaItems]);
 
 
   const urgentCount = enrichedClients.filter(c => c.automation.priority === 'Высокий' && c.status !== 'Закрыт').length;
   const inAutomation = enrichedClients.filter(c => c.status !== 'Закрыт').length;
+  const demoLabel = demoPlaying ? 'Пауза' : (demoStep > 0 && demoStep < DEMO_AUTOPLAY_STEPS ? 'Продолжить' : 'Запустить демо');
 
   function exportToExcel() {
     const rows = [
@@ -709,19 +729,29 @@ function App() {
     const openWithTasks = openClients.filter(client => client.tasks.some(task => !task.done));
     const roll = Math.random();
 
-    if (roll < 0.35 && openWithTasks.length) {
+    // "Клиент позвонил, дедлайн подгорел" — гарантирует, что за автоплей будут видны все три спектра.
+    if (roll < 0.2 && openWithTasks.length) {
       const client = openWithTasks[Math.floor(Math.random() * openWithTasks.length)];
       const task = client.tasks.find(t => !t.done);
-      setToast(`Демо: задача «${task.title}» у ${client.name} выполнена`);
-      updateTask(client.id, task.id, { done: true });
+      const urgentDueAt = new Date(Date.now() + Math.round(Math.random() * 10) * 3600000).toISOString();
+      setToast(`Демо: у ${client.name} срочный дедлайн по «${task.title}»`);
+      updateTask(client.id, task.id, { dueAt: urgentDueAt }, { notify: false });
       return;
     }
 
-    if (roll < 0.65 && openClients.length) {
+    if (roll < 0.45 && openWithTasks.length) {
+      const client = openWithTasks[Math.floor(Math.random() * openWithTasks.length)];
+      const task = client.tasks.find(t => !t.done);
+      setToast(`Демо: задача «${task.title}» у ${client.name} выполнена`);
+      updateTask(client.id, task.id, { done: true }, { notify: demoSendTasks });
+      return;
+    }
+
+    if (roll < 0.7 && openClients.length) {
       const client = openClients[Math.floor(Math.random() * openClients.length)];
       const nextStatus = STATUSES[STATUSES.indexOf(client.status) + 1];
       if (nextStatus) {
-        updateStatus(client.id, nextStatus);
+        updateStatus(client.id, nextStatus, { notify: demoSendStatus });
         return;
       }
     }
@@ -742,14 +772,29 @@ function App() {
     }, { toast: `Демо: добавлен сценарий "${scenario.name}"` });
   }
 
-  async function updateStatus(id, status) {
+  function toggleDemoPlay() {
+    if (demoPlaying) {
+      setDemoPlaying(false);
+      return;
+    }
+    if (demoStep === 0 || demoStep >= DEMO_AUTOPLAY_STEPS) {
+      setDemoStep(1);
+      runDemoScenario();
+    }
+    setDemoPlaying(true);
+  }
+
+  runDemoScenarioRef.current = runDemoScenario;
+
+  async function updateStatus(id, status, options = {}) {
+    const notify = options.notify ?? true;
     const current = enrichedClients.find(client => client.id === id);
     setSavingId(id);
     try {
       const updated = await persistPatch(id, { status });
       patchClient(id, updated);
       setToast(`Статус: ${status}`);
-      if (current?.notifyStatusChanges && current.status !== status) {
+      if (notify && current?.notifyStatusChanges && current.status !== status) {
         notifyTelegram({ type: 'status_changed', client: { ...current, ...updated, status }, previousStatus: current.status, status });
       }
     } catch (error) {
@@ -843,7 +888,8 @@ function App() {
     }
   }
 
-  async function updateTask(id, taskId, patch) {
+  async function updateTask(id, taskId, patch, options = {}) {
+    const notify = options.notify ?? true;
     const current = enrichedClients.find(client => client.id === id);
     if (!current) return;
     let completedTask = null;
@@ -858,7 +904,7 @@ function App() {
     try {
       const updated = await persistPatch(id, { tasks });
       patchClient(id, updated);
-      if (completedTask && current.notifyTaskDone) {
+      if (notify && completedTask && current.notifyTaskDone) {
         notifyTelegram({ type: 'task_done', client: current, task: completedTask });
       }
     } catch (error) {
@@ -1048,12 +1094,33 @@ function App() {
         <div className="demo-runner">
           <div>
             <span>Сценарий</span>
-            <strong>Новый кейс → задачи → дедлайн → Telegram</strong>
+            <strong>Автоплей: новые клиенты, статусы, задачи и дедлайны каждые 5 сек</strong>
+            {demoStep > 0 && <small className="demo-step-counter">Шаг {Math.min(demoStep, DEMO_AUTOPLAY_STEPS)} / {DEMO_AUTOPLAY_STEPS}</small>}
           </div>
-          <button className="btn-dark" onClick={runDemoScenario} disabled={savingId === 'create'}>
-            <Play size={16} />
-            <span>Запустить демо</span>
-          </button>
+          <div className="demo-controls">
+            <button
+              type="button"
+              className={`chip-toggle ${demoSendStatus ? 'on' : ''}`}
+              onClick={() => setDemoSendStatus(value => !value)}
+              title="Слать в Telegram уведомления о смене статуса во время демо"
+            >
+              <Bell size={13} />
+              <span>Статусы</span>
+            </button>
+            <button
+              type="button"
+              className={`chip-toggle ${demoSendTasks ? 'on' : ''}`}
+              onClick={() => setDemoSendTasks(value => !value)}
+              title="Слать в Telegram уведомления о выполнении задач во время демо"
+            >
+              <Bell size={13} />
+              <span>Задачи</span>
+            </button>
+            <button className="btn-dark" onClick={toggleDemoPlay} disabled={savingId === 'create'}>
+              {demoPlaying ? <Pause size={16} /> : <Play size={16} />}
+              <span>{demoLabel}</span>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -1127,6 +1194,7 @@ function App() {
                     ))}
                     title={`${cell.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}: ${cell.count} задач`}
                   >
+                    <span className="agenda-day-emoji">{BUCKET_EMOJI[cell.bucket]}</span>
                     <span className="agenda-day-bar" style={{ '--count': String(Math.min(cell.count, 6)) }} />
                     <span className="agenda-day-num">{cell.date.getDate()}</span>
                     <span className="agenda-day-name">{cell.date.toLocaleDateString('ru-RU', { weekday: 'short' })}</span>
@@ -1146,7 +1214,7 @@ function App() {
               {agendaGroups.filter(group => group.items.length).map(group => (
                 <div key={group.key} className={`agenda-group agenda-group-${group.key}`}>
                   <div className="agenda-group-title">
-                    <group.icon size={15} />
+                    <span className="agenda-emoji">{group.emoji}</span>
                     <span>{group.label}</span>
                     <strong>{group.items.length}</strong>
                   </div>
