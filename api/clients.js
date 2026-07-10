@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const STATUSES = new Set(['Новый', 'В работе', 'Закрыт']);
+const MAX_CLIENTS = 100;
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
@@ -107,6 +108,12 @@ export default async function handler(req, res) {
       const body = parseBody(req);
       const payload = createPayload(body);
       if (payload.error) return res.status(400).json({ error: payload.error });
+
+      const { count, error: countError } = await supabase.from(table).select('*', { count: 'exact', head: true });
+      if (countError) throw countError;
+      if ((count || 0) >= MAX_CLIENTS) {
+        return res.status(429).json({ error: 'limit_reached' });
+      }
 
       const { data, error } = await supabase.from(table).insert(payload).select('*').single();
       if (error) throw error;

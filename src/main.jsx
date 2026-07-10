@@ -381,11 +381,19 @@ function MetricCard({ label, value, hint }) {
 }
 
 function SourceBadge({ source, error }) {
-  if (source !== 'supabase') return null;
+  if (source === 'loading') return null;
+  if (source === 'supabase') {
+    return (
+      <div className="source-badge ok">
+        <Database size={16} />
+        <span>Supabase live</span>
+      </div>
+    );
+  }
   return (
-    <div className="source-badge ok" title={error || ''}>
+    <div className="source-badge demo" title={error || ''}>
       <Database size={16} />
-      <span>Supabase live</span>
+      <span>Demo · данные в браузере</span>
     </div>
   );
 }
@@ -577,7 +585,9 @@ function App() {
       setToast(options.toast || `Клиент "${saved.name}" добавлен`);
       notifyTelegram({ type: 'new_client', client: saved });
     } catch (error) {
-      setToast(`Не удалось сохранить: ${error.message}`);
+      setToast(error.message === 'limit_reached'
+        ? 'Лимит демо-базы (100 клиентов) исчерпан — удалите несколько клиентов, чтобы добавить новых'
+        : `Не удалось сохранить: ${error.message}`);
     } finally {
       setSavingId('');
     }
@@ -607,6 +617,27 @@ function App() {
   }
 
   function runDemoScenario() {
+    const openClients = enrichedClients.filter(client => client.status !== 'Закрыт');
+    const openWithTasks = openClients.filter(client => client.tasks.some(task => !task.done));
+    const roll = Math.random();
+
+    if (roll < 0.35 && openWithTasks.length) {
+      const client = openWithTasks[Math.floor(Math.random() * openWithTasks.length)];
+      const task = client.tasks.find(t => !t.done);
+      setToast(`Демо: задача «${task.title}» у ${client.name} выполнена`);
+      updateTask(client.id, task.id, { done: true });
+      return;
+    }
+
+    if (roll < 0.65 && openClients.length) {
+      const client = openClients[Math.floor(Math.random() * openClients.length)];
+      const nextStatus = STATUSES[STATUSES.indexOf(client.status) + 1];
+      if (nextStatus) {
+        updateStatus(client.id, nextStatus);
+        return;
+      }
+    }
+
     const scenario = DEMO_SCENARIOS[clients.length % DEMO_SCENARIOS.length];
     const createdAt = new Date().toISOString();
     const category = scenarioCategory(scenario.categoryId);
