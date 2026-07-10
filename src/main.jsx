@@ -1,23 +1,312 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import {
+  Bell,
+  Bot,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Clock3,
+  Database,
+  Download,
+  GripVertical,
+  MessageCircle,
+  Play,
+  Plus,
+  Save,
+  Search,
+  Tag,
+  Trash2,
+  X,
+} from 'lucide-react';
 import './styles.css';
 
 const STATUSES = ['Новый', 'В работе', 'Закрыт'];
 const STATUS_META = {
-  'Новый':    { color: 'status-new',    step: 0 },
-  'В работе': { color: 'status-active', step: 1 },
-  'Закрыт':  { color: 'status-done',   step: 2 },
+  'Новый': { color: 'status-new', step: 0, label: 'лид принят' },
+  'В работе': { color: 'status-active', step: 1, label: 'юрист ведёт дело' },
+  'Закрыт': { color: 'status-done', step: 2, label: 'результат зафиксирован' },
 };
-const DEMO = [
-  { id: 'd1', name: 'Анна Петрова',  phone: '+7 900 123-45-67', status: 'Новый',    notes: 'ДТП, нужна консультация',     createdAt: new Date(Date.now() - 86400000 * 2).toISOString() },
-  { id: 'd2', name: 'ООО Север',      phone: '+7 343 222-10-10', status: 'В работе', notes: 'Трудовой спор с сотрудником',  createdAt: new Date(Date.now() - 86400000).toISOString() },
-  { id: 'd3', name: 'Илья Смирнов',  phone: '+7 912 555-44-33', status: 'Закрыт',   notes: '',                             createdAt: new Date(Date.now() - 86400000 * 5).toISOString() },
+
+const CASE_TYPES = [
+  {
+    id: 'traffic',
+    title: 'ДТП / страховая',
+    owner: 'Автоюрист',
+    deadlineHours: 24,
+    partyType: 'person',
+    document: 'Претензия в страховую',
+    keywords: ['дтп', 'авар', 'осаго', 'каско', 'страх'],
+    checklist: ['Проверить дату ДТП', 'Запросить документы ГИБДД', 'Подготовить претензию', 'Поставить контроль ответа'],
+  },
+  {
+    id: 'labor',
+    title: 'Трудовой спор',
+    owner: 'Юрист по трудовому праву',
+    deadlineHours: 48,
+    partyType: 'person',
+    document: 'Жалоба / досудебная претензия',
+    keywords: ['работ', 'сотруд', 'увольн', 'зарплат', 'труд'],
+    checklist: ['Проверить договор', 'Собрать переписку', 'Оценить сроки обращения', 'Подготовить позицию'],
+  },
+  {
+    id: 'family',
+    title: 'Семейное дело',
+    owner: 'Семейный юрист',
+    deadlineHours: 72,
+    partyType: 'person',
+    document: 'Проект заявления',
+    keywords: ['развод', 'алимент', 'ребен', 'семейн', 'имущество'],
+    checklist: ['Определить предмет спора', 'Собрать документы', 'Подготовить проект заявления', 'Назначить консультацию'],
+  },
+  {
+    id: 'business',
+    title: 'Бизнес / договор',
+    owner: 'Юрист для бизнеса',
+    deadlineHours: 72,
+    partyType: 'business',
+    document: 'Правовое заключение',
+    keywords: ['ооо', 'договор', 'контрагент', 'поставк', 'аренд'],
+    checklist: ['Проверить договор', 'Оценить риски', 'Сформировать вопросы', 'Подготовить правку документа'],
+  },
 ];
 
-function uid() { return window.crypto?.randomUUID?.() ?? String(Date.now() + Math.random()); }
-function load() { try { const s = localStorage.getItem('lcrm-v2'); return s ? JSON.parse(s) : DEMO; } catch { return DEMO; } }
-function loadTg() { try { return JSON.parse(localStorage.getItem('lcrm-tg') || 'null'); } catch { return null; } }
-function fmt(iso) { return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }); }
+const DEFAULT_CASE = {
+  id: 'common',
+  title: 'Общая консультация',
+  owner: 'Дежурный юрист',
+  deadlineHours: 24,
+  partyType: 'person',
+  document: 'План консультации',
+  checklist: ['Уточнить проблему', 'Проверить срочность', 'Назначить ответственного', 'Зафиксировать следующий шаг'],
+};
+
+const DEMO_SCENARIOS = [
+  { name: 'Мария Кузнецова', categoryId: 'traffic', status: 'Новый', notes: 'ДТП, страховая занизила выплату. Нужна претензия и контроль срока ответа.', tasks: ['Проверить дату ДТП', 'Запросить документы ГИБДД', 'Подготовить претензию', 'Поставить контроль ответа'], done: 0, ageDays: 0 },
+  { name: 'Анна Петрова', categoryId: 'traffic', status: 'В работе', notes: 'После аварии нужна оценка ущерба и письмо в страховую.', tasks: ['Собрать фото повреждений', 'Запросить акт осмотра', 'Назначить независимую экспертизу', 'Подготовить претензию'], done: 1, ageDays: 1 },
+  { name: 'Павел Орлов', categoryId: 'labor', status: 'Новый', notes: 'Работодатель задерживает выплату расчёта после увольнения.', tasks: ['Проверить трудовой договор', 'Собрать расчетные листки', 'Подготовить претензию работодателю'], done: 0, ageDays: 1 },
+  { name: 'ООО Вектор', categoryId: 'business', status: 'В работе', notes: 'Контрагент нарушил сроки поставки по договору.', tasks: ['Проверить договор поставки', 'Рассчитать неустойку', 'Подготовить досудебную претензию', 'Поставить контроль ответа'], done: 2, ageDays: 2 },
+  { name: 'Елена Морозова', categoryId: 'family', status: 'В работе', notes: 'Нужно подготовить документы по алиментам.', tasks: ['Уточнить данные ребёнка', 'Собрать справки о доходах', 'Подготовить заявление', 'Назначить дату подачи'], done: 2, ageDays: 2 },
+  { name: 'ООО Север', categoryId: 'business', status: 'Новый', notes: 'Нужна проверка договора аренды перед подписанием.', tasks: ['Проверить предмет договора', 'Оценить штрафы и расторжение', 'Сформировать правки', 'Отправить клиенту резюме рисков'], done: 0, ageDays: 3 },
+  { name: 'Илья Смирнов', categoryId: 'family', status: 'Закрыт', notes: 'Раздел имущества, консультация проведена, документы переданы.', tasks: ['Определить состав имущества', 'Подготовить список документов', 'Согласовать позицию', 'Передать клиенту план действий'], done: 4, ageDays: 5 },
+  { name: 'ООО Альфа', categoryId: 'business', status: 'В работе', notes: 'Покупатель не оплатил поставку, нужна претензия.', tasks: ['Сверить накладные', 'Проверить оплату', 'Рассчитать долг', 'Подготовить претензию'], done: 1, ageDays: 1 },
+  { name: 'Сергей Иванов', categoryId: 'labor', status: 'В работе', notes: 'Незаконное дисциплинарное взыскание.', tasks: ['Получить приказ', 'Собрать объяснения', 'Оценить сроки обжалования', 'Подготовить жалобу'], done: 2, ageDays: 4 },
+  { name: 'Наталья Белова', categoryId: 'traffic', status: 'Новый', notes: 'Виновник ДТП без страховки, нужна стратегия взыскания.', tasks: ['Проверить материалы ДТП', 'Оценить ущерб', 'Подготовить исковую перспективу'], done: 0, ageDays: 0 },
+  { name: 'ООО Меридиан', categoryId: 'business', status: 'Закрыт', notes: 'Проверка оферты для сайта завершена.', tasks: ['Проверить оферту', 'Проверить политику данных', 'Составить список правок', 'Передать финальную редакцию'], done: 4, ageDays: 6 },
+  { name: 'Ольга Романова', categoryId: 'family', status: 'Новый', notes: 'Нужна консультация по порядку общения с ребёнком.', tasks: ['Уточнить судебную историю', 'Собрать документы', 'Подготовить вопросы к консультации'], done: 0, ageDays: 0 },
+];
+
+const DEMO_CLIENTS = DEMO_SCENARIOS.slice(0, 10).map((scenario, index) => scenarioToClient(scenario, index, 'd'));
+const EMPTY_FORM = { name: '', phone: '+7', status: 'Новый', categoryId: 'traffic', notes: '', notifyStatusChanges: false, notifyTaskDone: true };
+const EMPTY_CATEGORY_FORM = { title: '', partyType: 'person', owner: '', deadlineHours: 24, document: '', checklist: '' };
+const DEMO_STORAGE_KEY = 'lcrm-v2-demo';
+const CATEGORIES_STORAGE_KEY = 'lcrm-categories';
+const TG_STORAGE_KEY = 'lcrm-tg';
+
+function daysAgo(value) {
+  return new Date(Date.now() - 86400000 * value).toISOString();
+}
+
+function uid() {
+  return window.crypto?.randomUUID?.() ?? String(Date.now() + Math.random());
+}
+
+function fakePhone(index) {
+  return `8(900)-000-00-${String((index % 99) + 1).padStart(2, '0')}`;
+}
+
+function scenarioCategory(categoryId) {
+  return CASE_TYPES.find(category => category.id === categoryId) || DEFAULT_CASE;
+}
+
+function scenarioTasks(scenario, createdAt) {
+  const category = scenarioCategory(scenario.categoryId);
+  return scenario.tasks.map((title, index) => normalizeTask({
+    id: `${scenario.categoryId}-${index + 1}-${createdAt}`,
+    title,
+    done: index < scenario.done,
+    dueAt: defaultDueAt(createdAt, category, index),
+    doneAt: index < scenario.done ? new Date(new Date(createdAt).getTime() + (index + 2) * 3600000).toISOString() : null,
+  }));
+}
+
+function scenarioToClient(scenario, index, prefix = 'demo') {
+  const category = scenarioCategory(scenario.categoryId);
+  const createdAt = daysAgo(scenario.ageDays || 0);
+  return normalizeClient({
+    id: `${prefix}-${index + 1}`,
+    name: scenario.name,
+    phone: fakePhone(index),
+    status: scenario.status,
+    categoryId: category.id,
+    categoryTitle: category.title,
+    notes: scenario.notes,
+    tasks: scenarioTasks(scenario, createdAt),
+    notifyStatusChanges: true,
+    notifyTaskDone: true,
+    createdAt,
+  });
+}
+
+function categoryTone(category) {
+  const partyType = typeof category === 'string' ? (category === 'business' ? 'business' : 'person') : category?.partyType;
+  return partyType === 'business' ? 'business' : 'person';
+}
+
+function partyTypeLabel(partyType) {
+  return partyType === 'business' ? 'Юрлицо' : 'Физлицо';
+}
+
+function loadDemoClients() {
+  try {
+    const saved = localStorage.getItem(DEMO_STORAGE_KEY);
+    return saved ? JSON.parse(saved).map(normalizeClient) : DEMO_CLIENTS;
+  } catch {
+    return DEMO_CLIENTS;
+  }
+}
+
+function saveDemoClients(clients) {
+  try {
+    localStorage.setItem(DEMO_STORAGE_KEY, JSON.stringify(clients));
+  } catch {}
+}
+
+function loadTg() {
+  try {
+    return JSON.parse(localStorage.getItem(TG_STORAGE_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function parseTasks(value) {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function toDateTimeLocal(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocal(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function normalizeTask(raw, fallbackDueAt) {
+  return {
+    id: raw?.id || uid(),
+    title: String(raw?.title || '').trim() || 'Новая задача',
+    done: Boolean(raw?.done),
+    dueAt: raw?.dueAt || raw?.due_at || fallbackDueAt || null,
+    createdAt: raw?.createdAt || raw?.created_at || new Date().toISOString(),
+    doneAt: raw?.doneAt || raw?.done_at || null,
+  };
+}
+
+function createTask(title, dueAt) {
+  return normalizeTask({ title, dueAt });
+}
+
+function normalizeCategory(raw) {
+  return {
+    id: raw?.id || uid(),
+    title: String(raw?.title || '').trim() || 'Новая категория',
+    owner: String(raw?.owner || 'Дежурный юрист').trim(),
+    deadlineHours: Number(raw?.deadlineHours || raw?.deadline_hours || 24),
+    partyType: raw?.partyType === 'business' || raw?.party_type === 'business' || raw?.id === 'business' ? 'business' : 'person',
+    document: String(raw?.document || 'План консультации').trim(),
+    keywords: Array.isArray(raw?.keywords) ? raw.keywords : [],
+    checklist: Array.isArray(raw?.checklist) ? raw.checklist : DEFAULT_CASE.checklist,
+  };
+}
+
+function loadCategories() {
+  try {
+    const saved = localStorage.getItem(CATEGORIES_STORAGE_KEY);
+    const custom = saved ? JSON.parse(saved).map(normalizeCategory) : [];
+    return mergeCategories(CASE_TYPES, custom);
+  } catch {
+    return CASE_TYPES.map(normalizeCategory);
+  }
+}
+
+function saveCategories(categories) {
+  try {
+    localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
+  } catch {}
+}
+
+function mergeCategories(...groups) {
+  const map = new Map();
+  groups.flat().filter(Boolean).forEach(raw => {
+    const category = normalizeCategory(raw);
+    map.set(category.id, { ...map.get(category.id), ...category });
+  });
+  return [...map.values()];
+}
+
+function clientCategoryCandidates(clients) {
+  return clients
+    .filter(client => client.categoryId && client.categoryTitle)
+    .map(client => ({ ...DEFAULT_CASE, id: client.categoryId, title: client.categoryTitle }));
+}
+
+function resolveCategory(client, categories) {
+  if (client.categoryId) {
+    const selected = categories.find(category => category.id === client.categoryId);
+    if (selected) return selected;
+  }
+  if (client.categoryTitle) return normalizeCategory({ ...DEFAULT_CASE, id: client.categoryId || client.categoryTitle, title: client.categoryTitle });
+  const haystack = `${client.name} ${client.notes}`.toLowerCase();
+  return categories.find(type => type.keywords.some(keyword => haystack.includes(keyword))) || DEFAULT_CASE;
+}
+
+function defaultDueAt(createdAt, category, index = 0) {
+  return new Date(new Date(createdAt).getTime() + (category.deadlineHours + index * 12) * 3600000).toISOString();
+}
+
+function nearestOpenTask(tasks) {
+  return tasks
+    .filter(task => !task.done && task.dueAt)
+    .sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt))[0] || null;
+}
+
+function normalizeClient(raw) {
+  return {
+    id: raw.id,
+    name: raw.name || 'Клиент',
+    phone: raw.phone || '',
+    status: STATUSES.includes(raw.status) ? raw.status : 'Новый',
+    categoryId: raw.categoryId || raw.category_id || '',
+    categoryTitle: raw.categoryTitle || raw.category_title || '',
+    notes: raw.notes || '',
+    tasks: parseTasks(raw.tasks).map(task => normalizeTask(task)),
+    notifyStatusChanges: Boolean(raw.notifyStatusChanges ?? raw.notify_status_changes ?? false),
+    notifyTaskDone: Boolean(raw.notifyTaskDone ?? raw.notify_task_done ?? true),
+    createdAt: raw.createdAt || raw.created_at || new Date().toISOString(),
+  };
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
+function fmtDateTime(iso) {
+  return new Date(iso).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
 
 function extractPhoneDigits(raw) {
   let digits = raw.replace(/\D/g, '');
@@ -25,6 +314,7 @@ function extractPhoneDigits(raw) {
   if (digits.startsWith('7')) digits = digits.slice(1);
   return digits.slice(0, 10);
 }
+
 function formatPhoneDigits(digits) {
   let out = '+7';
   if (digits.length > 0) out += '(' + digits.slice(0, 3);
@@ -34,57 +324,498 @@ function formatPhoneDigits(digits) {
   if (digits.length > 8) out += '-' + digits.slice(8, 10);
   return out;
 }
-function formatPhone(raw) { return formatPhoneDigits(extractPhoneDigits(raw)); }
+
+function formatPhone(raw) {
+  return formatPhoneDigits(extractPhoneDigits(raw));
+}
+
+function classifyClient(client, categories, now = Date.now()) {
+  const category = resolveCategory(client, categories);
+  const nearest = nearestOpenTask(client.tasks);
+  const deadlineAt = nearest?.dueAt || defaultDueAt(client.createdAt, category);
+  const hoursLeft = Math.round((new Date(deadlineAt).getTime() - now) / 3600000);
+  const haystack = `${client.name} ${client.notes}`.toLowerCase();
+  const urgentWords = ['срочно', 'суд', 'сегодня', 'завтра', 'дтп', 'увольн'];
+  const priority = client.status !== 'Закрыт' && (urgentWords.some(word => haystack.includes(word)) || hoursLeft <= 12) ? 'Высокий' : 'Нормальный';
+
+  return { ...category, deadlineAt, hoursLeft, priority };
+}
+
+function enrichClient(client, categories, now) {
+  const automation = classifyClient(client, categories, now);
+  return {
+    ...client,
+    categoryId: client.categoryId || automation.id,
+    categoryTitle: client.categoryTitle || automation.title,
+    automation,
+  };
+}
+
+async function requestJson(url, options = {}) {
+  const res = await fetch(url, options);
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error(res.ok ? 'api_not_available' : `http_${res.status}`);
+  }
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.status || `http_${res.status}`);
+  return data;
+}
+
+async function requestClients(method, payload, id) {
+  const url = id ? `/api/clients?id=${encodeURIComponent(id)}` : '/api/clients';
+  const init = { method, headers: { 'Content-Type': 'application/json' } };
+  if (payload !== undefined) init.body = JSON.stringify(payload);
+  return requestJson(url, init);
+}
+
+function MetricCard({ label, value, hint }) {
+  return (
+    <div className="metric-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{hint}</small>
+    </div>
+  );
+}
+
+function SourceBadge({ source, error }) {
+  if (source !== 'supabase') return null;
+  return (
+    <div className="source-badge ok" title={error || ''}>
+      <Database size={16} />
+      <span>Supabase live</span>
+    </div>
+  );
+}
+
+function csvCell(value) {
+  let normalized = value === null || value === undefined ? '' : String(value);
+  if (/^[=+\-@\t\r]/.test(normalized)) normalized = `'${normalized}`;
+  return `"${normalized.replace(/"/g, '""')}"`;
+}
+
+function downloadCsv(filename, rows) {
+  const csv = `sep=;\r\n${rows.map(row => row.map(csvCell).join(';')).join('\r\n')}`;
+  const blob = new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 function App() {
-  const [clients, setClients]   = React.useState(load);
-  const [form, setForm]         = React.useState({ name: '', phone: '+7', status: 'Новый', notes: '' });
-  const [filter, setFilter]     = React.useState('Все');
-  const [search, setSearch]     = React.useState('');
-  const [toast, setToast]       = React.useState('');
+  const [clients, setClients] = React.useState([]);
+  const [categories, setCategories] = React.useState(loadCategories);
+  const [categoryForm, setCategoryForm] = React.useState(EMPTY_CATEGORY_FORM);
+  const [categoryFormOpen, setCategoryFormOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [source, setSource] = React.useState('loading');
+  const [sourceError, setSourceError] = React.useState('');
+  const [form, setForm] = React.useState(EMPTY_FORM);
+  const [filter, setFilter] = React.useState('Все');
+  const [search, setSearch] = React.useState('');
+  const [toast, setToast] = React.useState('');
   const [expanded, setExpanded] = React.useState(null);
   const [formOpen, setFormOpen] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
-  const [tgUser, setTgUser]     = React.useState(loadTg);   // { username, chatId, firstName }
-  const [tgInput, setTgInput]   = React.useState('');
-  const [tgStatus, setTgStatus] = React.useState('idle');   // idle | loading | ok | error | not_found
+  const [savingId, setSavingId] = React.useState('');
+  const [noteDrafts, setNoteDrafts] = React.useState({});
+  const [taskInputs, setTaskInputs] = React.useState({});
+  const [tgUser, setTgUser] = React.useState(loadTg);
+  const [tgInput, setTgInput] = React.useState('');
+  const [tgStatus, setTgStatus] = React.useState('idle');
+  const [now, setNow] = React.useState(Date.now());
   const phoneRef = React.useRef(null);
 
-  React.useEffect(() => { localStorage.setItem('lcrm-v2', JSON.stringify(clients)); }, [clients]);
-  React.useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 2800); return () => clearTimeout(t); }, [toast]);
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  React.useEffect(() => {
+    let ignore = false;
+
+    async function bootstrap() {
+      try {
+        const payload = await requestClients('GET');
+        if (!Array.isArray(payload)) throw new Error('invalid_clients_payload');
+        if (ignore) return;
+        setClients(payload.map(normalizeClient));
+        setSource('supabase');
+        setSourceError('');
+      } catch (error) {
+        if (ignore) return;
+        setClients(loadDemoClients());
+        setSource('demo');
+        setSourceError(error.message);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    bootstrap();
+    return () => { ignore = true; };
+  }, []);
+
+  React.useEffect(() => {
+    if (!loading && source === 'demo') saveDemoClients(clients);
+  }, [clients, loading, source]);
+
+  React.useEffect(() => {
+    saveCategories(categories);
+  }, [categories]);
+
+  React.useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(''), 3200);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   React.useEffect(() => {
     const el = phoneRef.current;
     if (el === document.activeElement) el.setSelectionRange(el.value.length, el.value.length);
   }, [form.phone]);
 
-  const counts = STATUSES.reduce((a, s) => ({ ...a, [s]: clients.filter(c => c.status === s).length }), { 'Все': clients.length });
-  const visible = clients.filter(c => {
-    const mf = filter === 'Все' || c.status === filter;
-    const ms = c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search);
-    return mf && ms;
-  });
+  const categoryOptions = React.useMemo(() => mergeCategories(categories, clientCategoryCandidates(clients)), [categories, clients]);
+  const enrichedClients = React.useMemo(() => clients.map(client => enrichClient(client, categoryOptions, now)), [clients, categoryOptions, now]);
+  const counts = React.useMemo(
+    () => STATUSES.reduce((acc, status) => ({ ...acc, [status]: clients.filter(c => c.status === status).length }), { Все: clients.length }),
+    [clients]
+  );
+  const visible = React.useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return enrichedClients.filter(client => {
+      const matchesFilter = filter === 'Все' || client.status === filter;
+      const matchesSearch = !query
+        || client.name.toLowerCase().includes(query)
+        || client.phone.includes(query)
+        || client.notes.toLowerCase().includes(query)
+        || client.automation.title.toLowerCase().includes(query)
+        || client.tasks.some(task => task.title.toLowerCase().includes(query));
+      return matchesFilter && matchesSearch;
+    });
+  }, [enrichedClients, filter, search]);
 
-  async function addClient(e) {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-    const client = { id: uid(), ...form, name: form.name.trim(), phone: form.phone === '+7' ? '' : form.phone, createdAt: new Date().toISOString() };
-    setClients(prev => [client, ...prev]);
-    setForm({ name: '', phone: '+7', status: 'Новый', notes: '' });
-    setFormOpen(false);
-    setToast(`Клиент "${client.name}" добавлен`);
-    notifyTelegram(client);
+
+  const urgentCount = enrichedClients.filter(c => c.automation.priority === 'Высокий' && c.status !== 'Закрыт').length;
+  const inAutomation = enrichedClients.filter(c => c.status !== 'Закрыт').length;
+
+  function exportToExcel() {
+    const rows = [
+      ['Клиент', 'Телефон', 'Категория', 'Тип клиента', 'Статус клиента', 'Заметка', 'Задача', 'Статус задачи', 'Дедлайн задачи', 'Дата создания'],
+    ];
+
+    enrichedClients.forEach(client => {
+      const tasks = client.tasks.length ? client.tasks : [null];
+      tasks.forEach(task => {
+        rows.push([
+          client.name,
+          client.phone,
+          client.automation.title,
+          partyTypeLabel(client.automation.partyType),
+          client.status,
+          client.notes,
+          task?.title || '',
+          task ? (task.done ? 'Выполнена' : 'В работе') : '',
+          task?.dueAt ? fmtDateTime(task.dueAt) : '',
+          fmtDateTime(client.createdAt),
+        ]);
+      });
+    });
+
+    const date = new Date().toISOString().slice(0, 10);
+    downloadCsv(`legal-crm-export-${date}.csv`, rows);
+    setToast('Выгрузка Excel сформирована');
   }
 
-  function updateStatus(id, status) { setClients(prev => prev.map(c => c.id === id ? { ...c, status } : c)); setToast('Статус обновлён'); }
-  function updateNotes(id, notes)   { setClients(prev => prev.map(c => c.id === id ? { ...c, notes } : c)); }
-  function remove(id) { setClients(prev => prev.filter(c => c.id !== id)); setToast('Клиент удалён'); setExpanded(null); }
+  function patchClient(id, patch) {
+    setClients(prev => prev.map(client => (client.id === id ? { ...client, ...patch } : client)));
+  }
 
-  async function notifyTelegram(client) {
+  async function persistCreate(client) {
+    if (source === 'supabase') {
+      const data = await requestClients('POST', client);
+      return normalizeClient(data.client || client);
+    }
+    return client;
+  }
+
+  async function persistPatch(id, patch) {
+    if (source === 'supabase') {
+      const data = await requestClients('PATCH', patch, id);
+      return normalizeClient(data.client || { id, ...patch });
+    }
+    return { id, ...patch };
+  }
+
+  async function addClientFromPayload(payload, options = {}) {
+    const category = categoryOptions.find(item => item.id === payload.categoryId) || categoryOptions[0] || DEFAULT_CASE;
+    const createdAt = new Date().toISOString();
+    const client = normalizeClient({
+      id: uid(),
+      createdAt,
+      categoryId: category.id,
+      categoryTitle: category.title,
+      tasks: category.checklist.map((title, index) => createTask(title, defaultDueAt(createdAt, category, index))),
+      notifyStatusChanges: payload.notifyStatusChanges,
+      notifyTaskDone: payload.notifyTaskDone,
+      ...payload,
+    });
+    setSavingId('create');
     try {
-      await fetch('/api/notify', {
+      const saved = await persistCreate(client);
+      setClients(prev => [saved, ...prev]);
+      setExpanded(saved.id);
+      setForm({ ...EMPTY_FORM, categoryId: category.id });
+      setFormOpen(false);
+      setToast(options.toast || `Клиент "${saved.name}" добавлен`);
+      notifyTelegram({ type: 'new_client', client: saved });
+    } catch (error) {
+      setToast(`Не удалось сохранить: ${error.message}`);
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  function addClient(event) {
+    event.preventDefault();
+    if (!form.name.trim()) return;
+    addClientFromPayload({
+      name: form.name.trim(),
+      phone: form.phone === '+7' ? '' : form.phone,
+      status: form.status,
+      categoryId: form.categoryId,
+      notes: form.notes,
+      notifyStatusChanges: form.notifyStatusChanges,
+      notifyTaskDone: form.notifyTaskDone,
+    });
+  }
+
+  function resetDemoData() {
+    localStorage.removeItem(DEMO_STORAGE_KEY);
+    localStorage.removeItem(CATEGORIES_STORAGE_KEY);
+    setCategories(CASE_TYPES.map(normalizeCategory));
+    setClients(DEMO_CLIENTS);
+    setExpanded(null);
+    setToast('Demo-данные сброшены');
+  }
+
+  function runDemoScenario() {
+    const scenario = DEMO_SCENARIOS[clients.length % DEMO_SCENARIOS.length];
+    const createdAt = new Date().toISOString();
+    const category = scenarioCategory(scenario.categoryId);
+    addClientFromPayload({
+      name: scenario.name,
+      phone: fakePhone(clients.length),
+      status: scenario.status,
+      categoryId: category.id,
+      categoryTitle: category.title,
+      notes: scenario.notes,
+      tasks: scenarioTasks(scenario, createdAt),
+      notifyStatusChanges: true,
+      notifyTaskDone: true,
+    }, { toast: `Демо: добавлен сценарий "${scenario.name}"` });
+  }
+
+  async function updateStatus(id, status) {
+    const current = enrichedClients.find(client => client.id === id);
+    setSavingId(id);
+    try {
+      const updated = await persistPatch(id, { status });
+      patchClient(id, updated);
+      setToast(`Статус: ${status}`);
+      if (current?.notifyStatusChanges && current.status !== status) {
+        notifyTelegram({ type: 'status_changed', client: { ...current, ...updated, status }, previousStatus: current.status, status });
+      }
+    } catch (error) {
+      setToast(`Статус не сохранён: ${error.message}`);
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  async function addCategory(event) {
+    event.preventDefault();
+    if (!categoryForm.title.trim()) return;
+    const category = normalizeCategory({
+      id: uid(),
+      title: categoryForm.title,
+      owner: categoryForm.owner,
+      partyType: categoryForm.partyType,
+      deadlineHours: categoryForm.deadlineHours,
+      document: categoryForm.document,
+      checklist: categoryForm.checklist.split('\n').map(item => item.trim()).filter(Boolean),
+    });
+    setCategories(prev => mergeCategories(prev, [category]));
+    setForm(prev => ({ ...prev, categoryId: category.id }));
+    setCategoryForm(EMPTY_CATEGORY_FORM);
+    setCategoryFormOpen(false);
+    setToast(`Категория "${category.title}" добавлена`);
+  }
+
+  async function updateCategory(id, categoryId) {
+    const category = categoryOptions.find(item => item.id === categoryId);
+    const current = enrichedClients.find(client => client.id === id);
+    if (!category || !current) return;
+    const patch = {
+      categoryId: category.id,
+      categoryTitle: category.title,
+      tasks: current.tasks.length ? current.tasks : category.checklist.map((title, index) => createTask(title, defaultDueAt(current.createdAt, category, index))),
+    };
+    setSavingId(id);
+    try {
+      const updated = await persistPatch(id, patch);
+      patchClient(id, updated);
+      setToast(`Категория: ${category.title}`);
+    } catch (error) {
+      setToast(`Категория не сохранена: ${error.message}`);
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  async function updateNotifyFlag(id, field, value) {
+    setSavingId(id);
+    try {
+      const updated = await persistPatch(id, { [field]: value });
+      patchClient(id, updated);
+    } catch (error) {
+      setToast(`Настройка не сохранена: ${error.message}`);
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  async function saveNotes(id) {
+    const notes = noteDrafts[id] ?? clients.find(c => c.id === id)?.notes ?? '';
+    setSavingId(id);
+    try {
+      const updated = await persistPatch(id, { notes });
+      patchClient(id, updated);
+      setToast('Заметка сохранена');
+    } catch (error) {
+      setToast(`Заметка не сохранена: ${error.message}`);
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  async function addTask(id) {
+    const title = (taskInputs[id] || '').trim();
+    const current = enrichedClients.find(client => client.id === id);
+    if (!title || !current) return;
+    const tasks = [...current.tasks, createTask(title, defaultDueAt(new Date().toISOString(), current.automation))];
+    setSavingId(id);
+    try {
+      const updated = await persistPatch(id, { tasks });
+      patchClient(id, updated);
+      setTaskInputs(prev => ({ ...prev, [id]: '' }));
+      setToast('Задача добавлена');
+    } catch (error) {
+      setToast(`Задача не сохранена: ${error.message}`);
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  async function updateTask(id, taskId, patch) {
+    const current = enrichedClients.find(client => client.id === id);
+    if (!current) return;
+    let completedTask = null;
+    const tasks = current.tasks.map(task => {
+      if (task.id !== taskId) return task;
+      const next = { ...task, ...patch };
+      if ('done' in patch) next.doneAt = patch.done ? new Date().toISOString() : null;
+      if (!task.done && next.done) completedTask = next;
+      return next;
+    });
+    setSavingId(id);
+    try {
+      const updated = await persistPatch(id, { tasks });
+      patchClient(id, updated);
+      if (completedTask && current.notifyTaskDone) {
+        notifyTelegram({ type: 'task_done', client: current, task: completedTask });
+      }
+    } catch (error) {
+      setToast(`Задача не обновлена: ${error.message}`);
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  async function removeTask(id, taskId) {
+    const current = enrichedClients.find(client => client.id === id);
+    if (!current) return;
+    const tasks = current.tasks.filter(task => task.id !== taskId);
+    setSavingId(id);
+    try {
+      const updated = await persistPatch(id, { tasks });
+      patchClient(id, updated);
+    } catch (error) {
+      setToast(`Задача не удалена: ${error.message}`);
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  async function reorderTask(id, fromTaskId, toTaskId) {
+    const current = enrichedClients.find(client => client.id === id);
+    if (!current || fromTaskId === toTaskId) return;
+    const tasks = [...current.tasks];
+    const fromIndex = tasks.findIndex(task => task.id === fromTaskId);
+    const toIndex = tasks.findIndex(task => task.id === toTaskId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    const [moved] = tasks.splice(fromIndex, 1);
+    tasks.splice(toIndex, 0, moved);
+    setSavingId(id);
+    try {
+      const updated = await persistPatch(id, { tasks });
+      patchClient(id, updated);
+    } catch (error) {
+      setToast(`Порядок не сохранён: ${error.message}`);
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  function moveTask(id, taskId, direction) {
+    const current = enrichedClients.find(client => client.id === id);
+    if (!current) return;
+    const index = current.tasks.findIndex(task => task.id === taskId);
+    const targetIndex = index + direction;
+    if (index === -1 || targetIndex < 0 || targetIndex >= current.tasks.length) return;
+    reorderTask(id, taskId, current.tasks[targetIndex].id);
+  }
+
+  async function removeClient(id) {
+    const client = clients.find(item => item.id === id);
+    if (!client || !window.confirm(`Удалить клиента "${client.name}"?`)) return;
+
+    setSavingId(id);
+    try {
+      if (source === 'supabase') await requestClients('DELETE', undefined, id);
+      setClients(prev => prev.filter(item => item.id !== id));
+      setExpanded(current => (current === id ? null : current));
+      setToast('Клиент удалён');
+    } catch (error) {
+      setToast(`Не удалось удалить: ${error.message}`);
+    } finally {
+      setSavingId('');
+    }
+  }
+
+  async function notifyTelegram(payload) {
+    try {
+      await requestJson('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...client, chatId: tgUser?.chatId || null }),
+        body: JSON.stringify({ ...payload, chatId: tgUser?.chatId || null }),
       });
     } catch {}
   }
@@ -94,231 +825,373 @@ function App() {
     if (!username) return;
     setTgStatus('loading');
     try {
-      const res = await fetch('/api/connect', {
+      const data = await requestJson('/api/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username }),
       });
-      const data = await res.json();
       if (data.status === 'found') {
         const user = { username, chatId: data.chatId, firstName: data.firstName };
         setTgUser(user);
-        localStorage.setItem('lcrm-tg', JSON.stringify(user));
+        localStorage.setItem(TG_STORAGE_KEY, JSON.stringify(user));
         setTgStatus('ok');
         setTgInput('');
-        setToast('Telegram подключён!');
+        setToast('Telegram подключён');
       } else {
-        setTgStatus('not_found');
+        setTgStatus(data.status === 'bot_not_configured' ? 'not_configured' : 'not_found');
       }
-    } catch {
-      setTgStatus('error');
+    } catch (error) {
+      setTgStatus(error.message === 'api_not_available' ? 'api_unavailable' : 'error');
     }
   }
 
   function disconnectTelegram() {
     setTgUser(null);
-    localStorage.removeItem('lcrm-tg');
+    localStorage.removeItem(TG_STORAGE_KEY);
     setTgStatus('idle');
     setTgInput('');
     setToast('Telegram отключён');
+  }
+
+  function toggleExpanded(client) {
+    setExpanded(current => {
+      const next = current === client.id ? null : client.id;
+      if (next) setNoteDrafts(prev => (client.id in prev ? prev : { ...prev, [client.id]: client.notes || '' }));
+      return next;
+    });
   }
 
   return (
     <main className="page">
       {toast && <div className="toast">{toast}</div>}
 
-      <header className="top">
-        <div>
-          <p className="eyebrow">LegalTech · Доступное право</p>
-          <h1>Мои клиенты</h1>
+      <header className="topbar">
+        <div className="brand-block">
+          <span className="eyebrow">Legal CRM · automation portfolio</span>
+          <h1>Дела, клиенты и автоматизация</h1>
         </div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <button
-            className={`btn-tg-toggle ${tgUser ? 'tg-connected' : ''}`}
-            onClick={() => setSettingsOpen(o => !o)}
-            title="Настройки Telegram-уведомлений"
-          >
-            <span className="btn-tg-icon">{tgUser ? '🔔' : '📲'}</span>
-            {tgUser ? `@${tgUser.username}` : 'Подключить уведомления'}
+        <div className="top-actions">
+          <SourceBadge source={source} error={sourceError} />
+          <button className={`btn-secondary btn-telegram ${tgUser ? 'success' : ''}`} onClick={() => setSettingsOpen(value => !value)}>
+            {tgUser ? <Bell size={16} /> : <Bot size={16} />}
+            <span>{tgUser ? `Telegram: @${tgUser.username}` : 'Telegram-уведомления'}</span>
           </button>
-          <button className="btn-primary" onClick={() => setFormOpen(o => !o)}>
-            {formOpen ? '✕ Закрыть' : '+ Добавить клиента'}
+          <button className="btn-primary" onClick={() => setFormOpen(value => !value)}>
+            {formOpen ? <X size={16} /> : <Plus size={16} />}
+            <span>{formOpen ? 'Закрыть' : 'Новый клиент'}</span>
           </button>
         </div>
       </header>
 
+      <section className="metrics-grid">
+        <MetricCard label="Воронка" value={clients.length} hint="клиентов в базе" />
+        <MetricCard label="В работе" value={inAutomation} hint="активных дел" />
+        <MetricCard label="Срочно" value={urgentCount} hint="нужен быстрый ответ" />
+        <div className="demo-runner">
+          <div>
+            <span>Сценарий</span>
+            <strong>Новый кейс → задачи → дедлайн → Telegram</strong>
+          </div>
+          <button className="btn-dark" onClick={runDemoScenario} disabled={savingId === 'create'}>
+            <Play size={16} />
+            <span>Запустить демо</span>
+          </button>
+        </div>
+      </section>
+
       {settingsOpen && (
-        <div className="settings-panel">
-          <p className="settings-title">Telegram-уведомления</p>
+        <section className="settings-panel">
+          <div className="section-title">
+            <MessageCircle size={18} />
+            <span>Telegram-уведомления</span>
+          </div>
           {tgUser ? (
             <div className="tg-connected-info">
-              <span className="tg-badge">✓ @{tgUser.username}{tgUser.firstName ? ` (${tgUser.firstName})` : ''}</span>
-              <span className="tg-desc">Уведомления о новых клиентах приходят вам в Telegram</span>
-              <button className="btn-ghost btn-sm" onClick={disconnectTelegram}>Отключить</button>
+              <span className="tg-badge"><CheckCircle2 size={15} /> @{tgUser.username}{tgUser.firstName ? ` (${tgUser.firstName})` : ''}</span>
+              <span className="tg-desc">Новые лиды отправляются в подключённый Telegram.</span>
+              <button className="btn-ghost compact" onClick={disconnectTelegram}>Отключить</button>
             </div>
           ) : (
             <div className="tg-connect-form">
-              <p className="tg-hint">
-                1. Напишите любое сообщение боту{' '}
-                <a href="https://t.me/dostupnoe_pravo_bot" target="_blank" rel="noopener noreferrer" className="tg-bot-link">
-                  @dostupnoe_pravo_bot
-                </a>{' '}
-                в Telegram<br/>
-                2. Введите ваш @логин ниже и нажмите «Подключить»
-              </p>
+              <p>Напишите любое сообщение боту <a href="https://t.me/dostupnoe_pravo_bot" target="_blank" rel="noopener noreferrer">@dostupnoe_pravo_bot</a>, затем введите свой username.</p>
               <div className="tg-input-row">
-                <span className="tg-at">@</span>
-                <input
-                  className="tg-input"
-                  placeholder="ваш_логин"
-                  value={tgInput}
-                  onChange={e => { setTgInput(e.target.value.replace(/^@/, '')); setTgStatus('idle'); }}
-                  onKeyDown={e => e.key === 'Enter' && connectTelegram()}
-                />
-                <button
-                  className="btn-primary btn-sm"
-                  onClick={connectTelegram}
-                  disabled={tgStatus === 'loading' || !tgInput.trim()}
-                >
-                  {tgStatus === 'loading' ? '...' : 'Подключить'}
-                </button>
+                <span>@</span>
+                <input value={tgInput} placeholder="username" onChange={e => { setTgInput(e.target.value.replace(/^@/, '')); setTgStatus('idle'); }} onKeyDown={e => e.key === 'Enter' && connectTelegram()} />
+                <button className="btn-primary compact" onClick={connectTelegram} disabled={tgStatus === 'loading' || !tgInput.trim()}>{tgStatus === 'loading' ? '...' : 'Подключить'}</button>
               </div>
-              {tgStatus === 'not_found' && (
-                <p className="tg-error">Не нашли вас. Сначала напишите боту @dostupnoe_pravo_bot в Telegram, потом попробуйте снова.</p>
-              )}
-              {tgStatus === 'error' && (
-                <p className="tg-error">Ошибка соединения. Попробуйте ещё раз.</p>
-              )}
+              {tgStatus === 'not_configured' && <p className="form-error">На сервере не задан TELEGRAM_BOT_TOKEN.</p>}
+              {tgStatus === 'not_found' && <p className="form-error">Пользователь не найден в последних сообщениях бота.</p>}
+              {tgStatus === 'api_unavailable' && <p className="form-error">Локальный Vite-сервер не запускает /api. Для Telegram откройте проект через vercel dev.</p>}
+              {tgStatus === 'error' && <p className="form-error">Ошибка соединения с Telegram API.</p>}
             </div>
           )}
-        </div>
+        </section>
       )}
 
-      <div className="counters">
-        {['Все', ...STATUSES].map(s => (
-          <button key={s} className={`counter-pill ${filter === s ? 'active' : ''} ${s !== 'Все' ? STATUS_META[s]?.color : ''}`}
-            onClick={() => setFilter(s)}>
-            <span className="pill-label">{s}</span>
-            <span className="pill-count">{counts[s] ?? 0}</span>
+      <section className="category-panel">
+        <div className="section-title inline-title">
+          <Tag size={18} />
+          <span>Категории дел</span>
+          <button className="btn-secondary compact" onClick={() => setCategoryFormOpen(value => !value)}>
+            {categoryFormOpen ? <X size={15} /> : <Plus size={15} />}
+            <span>{categoryFormOpen ? 'Закрыть' : 'Добавить категорию'}</span>
           </button>
-        ))}
-        <input className="search" placeholder="Поиск по имени или телефону…"
-          value={search} onChange={e => setSearch(e.target.value)} />
-      </div>
-
-      {formOpen && (
-        <form className="add-form" onSubmit={addClient}>
-          <div className="form-row">
-            <div className="field">
-              <label>Имя клиента *</label>
-              <input placeholder="Сергей Иванов" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-            </div>
-            <div className="field">
-              <label>Телефон</label>
-              <input
-                ref={phoneRef}
-                placeholder="+7(900)-000-00-00"
-                value={form.phone}
-                onChange={e => setForm({ ...form, phone: formatPhone(e.target.value) })}
-                onKeyDown={e => {
-                  if (e.key !== 'Backspace' && e.key !== 'Delete') return;
-                  e.preventDefault();
-                  setForm(f => ({ ...f, phone: formatPhoneDigits(extractPhoneDigits(f.phone).slice(0, -1)) }));
-                }}
-                onFocus={e => { const v = e.target.value; requestAnimationFrame(() => e.target.setSelectionRange(v.length, v.length)); }}
-                inputMode="tel"
-              />
-            </div>
-            <div className="field field-sm">
-              <label>Статус</label>
-              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
-                {STATUSES.map(s => <option key={s}>{s}</option>)}
+        </div>
+        <div className="category-strip">
+          {categoryOptions.map(category => <span key={category.id} className={`category-pill ${categoryTone(category)}`}><span>{category.title}</span><small>{partyTypeLabel(category.partyType)}</small></span>)}
+        </div>
+        {categoryFormOpen && (
+          <form className="category-form" onSubmit={addCategory}>
+            <label className="field">
+              <span>Название</span>
+              <input value={categoryForm.title} onChange={e => setCategoryForm({ ...categoryForm, title: e.target.value })} placeholder="Например: Наследство" required />
+            </label>
+            <label className="field small-field">
+              <span>Тип клиента</span>
+              <select value={categoryForm.partyType} onChange={e => setCategoryForm({ ...categoryForm, partyType: e.target.value })}>
+                <option value="person">Физлицо</option>
+                <option value="business">Юрлицо</option>
               </select>
-            </div>
-          </div>
-          <div className="field">
-            <label>Заметка</label>
-            <input placeholder="Кратко о деле" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
-          </div>
-          <div className="form-footer">
-            <button type="submit" className="btn-primary">Добавить</button>
-            <button type="button" className="btn-ghost" onClick={() => setFormOpen(false)}>Отмена</button>
-          </div>
-        </form>
-      )}
-
-      <div className="table-wrap">
-        {visible.length === 0 ? (
-          <div className="empty">{search || filter !== 'Все' ? 'Клиентов не найдено' : 'Добавьте первого клиента'}</div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th style={{width:'32%'}}>Клиент</th>
-                <th style={{width:'18%'}}>Телефон</th>
-                <th style={{width:'22%'}}>Статус</th>
-                <th style={{width:'14%'}}>Добавлен</th>
-                <th style={{width:'14%'}}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map(c => (
-                <React.Fragment key={c.id}>
-                  <tr className={expanded === c.id ? 'row-expanded' : ''} onClick={() => setExpanded(expanded === c.id ? null : c.id)}>
-                    <td>
-                      <div className="client-name">
-                        <span className="avatar">{c.name[0]}</span>
-                        <span>{c.name}</span>
-                      </div>
-                    </td>
-                    <td className="muted">{c.phone || '—'}</td>
-                    <td onClick={e => e.stopPropagation()}>
-                      <select className={`status-sel ${STATUS_META[c.status]?.color}`}
-                        value={c.status} onChange={e => updateStatus(c.id, e.target.value)}>
-                        {STATUSES.map(s => <option key={s}>{s}</option>)}
-                      </select>
-                    </td>
-                    <td className="muted small">{fmt(c.createdAt)}</td>
-                    <td className="actions" onClick={e => e.stopPropagation()}>
-                      <button className="btn-icon danger" onClick={() => remove(c.id)} title="Удалить">✕</button>
-                    </td>
-                  </tr>
-                  {expanded === c.id && (
-                    <tr className="detail-row">
-                      <td colSpan={5}>
-                        <div className="detail">
-                          <div className="progress-steps">
-                            {STATUSES.map((s, i) => (
-                              <React.Fragment key={s}>
-                                <div className={`step ${STATUS_META[c.status].step >= i ? 'done' : ''}`}>
-                                  <div className="step-dot">{STATUS_META[c.status].step >= i ? '✓' : i + 1}</div>
-                                  <span>{s}</span>
-                                </div>
-                                {i < 2 && <div className={`step-line ${STATUS_META[c.status].step > i ? 'done' : ''}`} />}
-                              </React.Fragment>
-                            ))}
-                          </div>
-                          <div className="notes-wrap">
-                            <label className="notes-label">Заметка</label>
-                            <textarea placeholder="Добавьте заметку по делу…"
-                              value={c.notes}
-                              onChange={e => updateNotes(c.id, e.target.value)}
-                              onClick={e => e.stopPropagation()} />
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
+            </label>
+            <label className="field">
+              <span>Ответственный</span>
+              <input value={categoryForm.owner} onChange={e => setCategoryForm({ ...categoryForm, owner: e.target.value })} placeholder="Юрист по наследству" />
+            </label>
+            <label className="field small-field">
+              <span>Дедлайн, ч</span>
+              <input type="number" min="1" value={categoryForm.deadlineHours} onChange={e => setCategoryForm({ ...categoryForm, deadlineHours: e.target.value })} />
+            </label>
+            <label className="field">
+              <span>Документ</span>
+              <input value={categoryForm.document} onChange={e => setCategoryForm({ ...categoryForm, document: e.target.value })} placeholder="Пакет документов" />
+            </label>
+            <label className="field wide-field">
+              <span>Стартовые задачи, каждая с новой строки</span>
+              <textarea value={categoryForm.checklist} onChange={e => setCategoryForm({ ...categoryForm, checklist: e.target.value })} placeholder={'Проверить документы\nНазначить консультацию'} />
+            </label>
+            <button className="btn-primary" type="submit"><Save size={16} /><span>Сохранить категорию</span></button>
+          </form>
         )}
-      </div>
+      </section>
+      <section className="workspace">
+        <div className="left-pane">
+          <div className="toolbar">
+            <div className="filters">
+              {['Все', ...STATUSES].map(status => (
+                <button key={status} className={`counter-pill ${filter === status ? 'active' : ''} ${status !== 'Все' ? STATUS_META[status]?.color : ''}`} onClick={() => setFilter(status)}>
+                  <span>{status}</span>
+                  <strong>{counts[status] ?? 0}</strong>
+                </button>
+              ))}
+            </div>
+            <button className="btn-secondary compact export-btn" onClick={exportToExcel} disabled={!enrichedClients.length}>
+              <Download size={15} />
+              <span>Экспорт Excel</span>
+            </button>
+            <label className="search-box">
+              <Search size={16} />
+              <input placeholder="Поиск по делу, телефону, категории" value={search} onChange={e => setSearch(e.target.value)} />
+            </label>
+          </div>
+
+          {formOpen && (
+            <form className="add-form" onSubmit={addClient}>
+              <div className="form-row">
+                <label className="field">
+                  <span>Имя клиента</span>
+                  <input placeholder="Сергей Иванов" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+                </label>
+                <label className="field">
+                  <span>Телефон</span>
+                  <input
+                    ref={phoneRef}
+                    placeholder="8(900)-000-00-01"
+                    value={form.phone}
+                    onChange={e => setForm({ ...form, phone: formatPhone(e.target.value) })}
+                    onKeyDown={e => {
+                      if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+                      e.preventDefault();
+                      setForm(prev => ({ ...prev, phone: formatPhoneDigits(extractPhoneDigits(prev.phone).slice(0, -1)) }));
+                    }}
+                    inputMode="tel"
+                  />
+                </label>
+                <label className="field">
+                  <span>Категория</span>
+                  <select value={form.categoryId} onChange={e => setForm({ ...form, categoryId: e.target.value })}>
+                    {categoryOptions.map(category => <option key={category.id} value={category.id}>{category.title}</option>)}
+                  </select>
+                </label>
+                <label className="field small-field">
+                  <span>Статус</span>
+                  <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+                    {STATUSES.map(status => <option key={status}>{status}</option>)}
+                  </select>
+                </label>
+              </div>
+              <label className="field">
+                <span>Суть обращения</span>
+                <input placeholder="Например: ДТП, страховая занизила выплату" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
+              </label>
+              <div className="switch-row">
+                <label><input type="checkbox" checked={form.notifyStatusChanges} onChange={e => setForm({ ...form, notifyStatusChanges: e.target.checked })} /> Уведомлять в Telegram о смене статуса</label>
+                <label><input type="checkbox" checked={form.notifyTaskDone} onChange={e => setForm({ ...form, notifyTaskDone: e.target.checked })} /> Уведомлять в Telegram о выполнении задач</label>
+              </div>
+              <div className="form-footer">
+                <button className="btn-primary" type="submit" disabled={savingId === 'create'}>
+                  <Plus size={16} />
+                  <span>{savingId === 'create' ? 'Сохраняю' : 'Добавить'}</span>
+                </button>
+                <button className="btn-ghost" type="button" onClick={() => setFormOpen(false)}>Отмена</button>
+              </div>
+            </form>
+          )}
+
+          <div className="table-wrap">
+            {loading ? (
+              <div className="empty">Загрузка клиентов...</div>
+            ) : visible.length === 0 ? (
+              <div className="empty">Клиенты не найдены</div>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Клиент</th>
+                    <th>Категория</th>
+                    <th>Статус</th>
+                    <th>Задачи</th>
+                    <th>Дедлайн</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visible.map(client => {
+                    const draft = noteDrafts[client.id] ?? client.notes;
+                    const isDirty = draft !== client.notes;
+                    const doneTasks = client.tasks.filter(task => task.done).length;
+                    const nearestTask = nearestOpenTask(client.tasks) || client.tasks[0];
+                    return (
+                      <React.Fragment key={client.id}>
+                        <tr className={expanded === client.id ? 'row-expanded' : ''} onClick={() => toggleExpanded(client)}>
+                          <td data-label="Клиент">
+                            <div className="client-name">
+                              <span className="avatar">{client.name[0]}</span>
+                              <div>
+                                <strong>{client.name}</strong>
+                                <small>{client.phone || 'телефон не указан'}</small>
+                              </div>
+                              {client.automation.priority === 'Высокий' && (
+                                <span className="priority hot" title="Нужен быстрый ответ">Срочно</span>
+                              )}
+                              <button
+                                className="icon-btn danger"
+                                onClick={e => { e.stopPropagation(); removeClient(client.id); }}
+                                disabled={savingId === client.id}
+                                aria-label="Удалить клиента"
+                                title="Удалить"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                          <td data-label="Категория" onClick={e => e.stopPropagation()}>
+                            <select className={`category-select ${categoryTone(client.automation)}`} value={client.categoryId} onChange={e => updateCategory(client.id, e.target.value)} disabled={savingId === client.id}>
+                              {categoryOptions.map(category => <option key={category.id} value={category.id}>{category.title}</option>)}
+                            </select>
+                          </td>
+                          <td data-label="Статус" onClick={e => e.stopPropagation()}>
+                            <select className={`status-select ${STATUS_META[client.status]?.color}`} value={client.status} onChange={e => updateStatus(client.id, e.target.value)} disabled={savingId === client.id}>
+                              {STATUSES.map(status => <option key={status}>{status}</option>)}
+                            </select>
+                          </td>
+                          <td data-label="Задачи"><span className="task-count">{doneTasks}/{client.tasks.length}</span></td>
+                          <td data-label="Дедлайн" onClick={e => e.stopPropagation()}>
+                            {nearestTask ? (
+                              <input
+                                className={`deadline-input ${client.automation.hoursLeft <= 0 && client.status !== 'Закрыт' ? 'overdue' : ''}`}
+                                type="datetime-local"
+                                value={toDateTimeLocal(nearestTask.dueAt)}
+                                onChange={e => updateTask(client.id, nearestTask.id, { dueAt: fromDateTimeLocal(e.target.value) })}
+                                disabled={savingId === client.id}
+                              />
+                            ) : <span className="deadline muted">Нет задач</span>}
+                          </td>
+                        </tr>
+                        {expanded === client.id && (
+                          <tr className="detail-row">
+                            <td colSpan={5}>
+                              <div className="detail-grid">
+                                <div className="progress-steps">
+                                  {STATUSES.map((status, index) => (
+                                    <React.Fragment key={status}>
+                                      <div className={`step ${STATUS_META[client.status].step >= index ? 'done' : ''}`}>
+                                        <span>{STATUS_META[client.status].step >= index ? <CheckCircle2 size={14} /> : index + 1}</span>
+                                        <strong>{status}</strong>
+                                        <small>{STATUS_META[status].label}</small>
+                                      </div>
+                                      {index < 2 && <div className={`step-line ${STATUS_META[client.status].step > index ? 'done' : ''}`} />}
+                                    </React.Fragment>
+                                  ))}
+                                </div>
+                                <div className="notes-wrap" onClick={e => e.stopPropagation()}>
+                                  <div className="switch-row vertical">
+                                    <label><input type="checkbox" checked={client.notifyStatusChanges} onChange={e => updateNotifyFlag(client.id, 'notifyStatusChanges', e.target.checked)} /> Уведомлять о смене статуса</label>
+                                    <label><input type="checkbox" checked={client.notifyTaskDone} onChange={e => updateNotifyFlag(client.id, 'notifyTaskDone', e.target.checked)} /> Уведомлять о выполнении задач</label>
+                                  </div>
+                                  <label>Заметка по делу</label>
+                                  <textarea value={draft} onChange={e => setNoteDrafts(prev => ({ ...prev, [client.id]: e.target.value }))} placeholder="Добавьте контекст, документы, следующий шаг" />
+                                  <button className="btn-secondary compact" onClick={() => saveNotes(client.id)} disabled={!isDirty || savingId === client.id}>
+                                    <Save size={15} />
+                                    <span>{savingId === client.id ? 'Сохраняю' : 'Сохранить заметку'}</span>
+                                  </button>
+                                </div>
+                                <div className="task-board" onClick={e => e.stopPropagation()}>
+                                  <div className="task-board-title"><strong>Задачи по клиенту</strong></div>
+                                  {client.tasks.map((task, index) => (
+                                    <div
+                                      key={task.id}
+                                      className={`task-row ${task.done ? 'done' : ''}`}
+                                      draggable
+                                      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', task.id); }}
+                                      onDragOver={e => e.preventDefault()}
+                                      onDrop={e => { e.preventDefault(); reorderTask(client.id, e.dataTransfer.getData('text/plain'), task.id); }}
+                                    >
+                                      <span className="task-drag-handle" title="Перетащите, чтобы изменить порядок"><GripVertical size={14} /></span>
+                                      <label className="task-check">
+                                        <input type="checkbox" checked={task.done} onChange={() => updateTask(client.id, task.id, { done: !task.done })} disabled={savingId === client.id} />
+                                        <span>{task.title}</span>
+                                      </label>
+                                      <input className="task-date" type="datetime-local" value={toDateTimeLocal(task.dueAt)} onChange={e => updateTask(client.id, task.id, { dueAt: fromDateTimeLocal(e.target.value) })} disabled={savingId === client.id} />
+                                      <div className="task-reorder-btns">
+                                        <button className="icon-btn compact" onClick={() => moveTask(client.id, task.id, -1)} disabled={savingId === client.id || index === 0} title="Переместить выше" aria-label="Переместить выше"><ChevronUp size={13} /></button>
+                                        <button className="icon-btn compact" onClick={() => moveTask(client.id, task.id, 1)} disabled={savingId === client.id || index === client.tasks.length - 1} title="Переместить ниже" aria-label="Переместить ниже"><ChevronDown size={13} /></button>
+                                      </div>
+                                      <button className="icon-btn" onClick={() => removeTask(client.id, task.id)} disabled={savingId === client.id} title="Удалить задачу"><Trash2 size={14} /></button>
+                                    </div>
+                                  ))}
+                                  <div className="task-add-row">
+                                    <input value={taskInputs[client.id] || ''} onChange={e => setTaskInputs(prev => ({ ...prev, [client.id]: e.target.value }))} placeholder="Новая задача" onKeyDown={e => e.key === 'Enter' && addTask(client.id)} />
+                                    <button className="btn-primary compact" onClick={() => addTask(client.id)} disabled={savingId === client.id || !(taskInputs[client.id] || '').trim()}><Plus size={15} /><span>Добавить</span></button>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+      </section>
 
       <footer className="foot">
         <span>{visible.length} из {clients.length} клиентов</span>
-        <span>{tgUser ? `🔔 @${tgUser.username}` : 'Данные хранятся в браузере'}</span>
+        <span>{source === 'supabase' ? 'Данные синхронизируются через Vercel API и Supabase' : 'Тестовые данные сохраняются в браузере'}</span>
+        {source === 'demo' && <button className="btn-ghost compact" onClick={resetDemoData}>Сбросить demo</button>}
       </footer>
     </main>
   );
