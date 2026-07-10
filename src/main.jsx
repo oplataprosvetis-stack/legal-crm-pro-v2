@@ -3,12 +3,15 @@ import { createRoot } from 'react-dom/client';
 import {
   Bell,
   Bot,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock3,
+  Coffee,
   Database,
   Download,
+  Flame,
   GripVertical,
   MessageCircle,
   Play,
@@ -351,6 +354,69 @@ function enrichClient(client, categories, now) {
   };
 }
 
+function urgencyBucket(hoursLeft) {
+  if (hoursLeft <= 12) return 'hot';
+  if (hoursLeft <= 72) return 'warm';
+  return 'cool';
+}
+
+function buildAgendaItems(clients, now) {
+  const items = [];
+  clients.forEach(client => {
+    client.tasks.forEach(task => {
+      if (task.done || !task.dueAt) return;
+      const hoursLeft = Math.round((new Date(task.dueAt).getTime() - now) / 3600000);
+      items.push({
+        id: `${client.id}:${task.id}`,
+        clientId: client.id,
+        clientName: client.name,
+        categoryTitle: client.automation?.title || client.categoryTitle,
+        taskId: task.id,
+        title: task.title,
+        dueAt: task.dueAt,
+        hoursLeft,
+        bucket: urgencyBucket(hoursLeft),
+      });
+    });
+  });
+  return items.sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
+}
+
+function relativeDueLabel(dueAt, now) {
+  const due = new Date(dueAt);
+  const nowDate = new Date(now);
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const nowDay = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+  const diffDays = Math.round((dueDay - nowDay) / 86400000);
+  const time = due.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  if (diffDays < 0) return `Просрочено · ${fmtDate(dueAt)}`;
+  if (diffDays === 0) return `Сегодня, ${time}`;
+  if (diffDays === 1) return `Завтра, ${time}`;
+  if (diffDays < 7) return `${due.toLocaleDateString('ru-RU', { weekday: 'short' })}, ${time}`;
+  return `${fmtDate(dueAt)}, ${time}`;
+}
+
+function buildDayStrip(items, now, days = 14) {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const cells = [];
+  for (let i = 0; i < days; i++) {
+    const dayStart = new Date(start.getTime() + i * 86400000);
+    const dayEnd = new Date(dayStart.getTime() + 86400000);
+    const dayItems = items.filter(item => {
+      const d = new Date(item.dueAt);
+      return d >= dayStart && d < dayEnd;
+    });
+    const bucket = dayItems.some(item => item.bucket === 'hot')
+      ? 'hot'
+      : dayItems.some(item => item.bucket === 'warm')
+        ? 'warm'
+        : dayItems.length ? 'cool' : 'empty';
+    cells.push({ date: dayStart, count: dayItems.length, bucket });
+  }
+  return cells;
+}
+
 async function requestJson(url, options = {}) {
   const res = await fetch(url, options);
   const contentType = res.headers.get('content-type') || '';
@@ -439,6 +505,7 @@ function App() {
   const [tgInput, setTgInput] = React.useState('');
   const [tgStatus, setTgStatus] = React.useState('idle');
   const [now, setNow] = React.useState(Date.now());
+  const [agendaDayFilter, setAgendaDayFilter] = React.useState(null);
   const phoneRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -509,6 +576,27 @@ function App() {
       return matchesFilter && matchesSearch;
     });
   }, [enrichedClients, filter, search]);
+
+  const agendaItems = React.useMemo(
+    () => buildAgendaItems(enrichedClients.filter(client => client.status !== 'Закрыт'), now),
+    [enrichedClients, now]
+  );
+  const agendaDayStrip = React.useMemo(() => buildDayStrip(agendaItems, now), [agendaItems, now]);
+  const overdueCount = React.useMemo(() => agendaItems.filter(item => item.hoursLeft < 0).length, [agendaItems]);
+  const visibleAgendaItems = React.useMemo(() => {
+    if (!agendaDayFilter) return agendaItems;
+    const dayStart = new Date(agendaDayFilter);
+    const dayEnd = new Date(dayStart.getTime() + 86400000);
+    return agendaItems.filter(item => {
+      const d = new Date(item.dueAt);
+      return d >= dayStart && d < dayEnd;
+    });
+  }, [agendaItems, agendaDayFilter]);
+  const agendaGroups = React.useMemo(() => ([
+    { key: 'hot', label: 'Горит', icon: Flame, items: visibleAgendaItems.filter(item => item.bucket === 'hot') },
+    { key: 'warm', label: 'Подгорает', icon: Clock3, items: visibleAgendaItems.filter(item => item.bucket === 'warm') },
+    { key: 'cool', label: 'На чилле', icon: Coffee, items: visibleAgendaItems.filter(item => item.bucket === 'cool') },
+  ]), [visibleAgendaItems]);
 
 
   const urgentCount = enrichedClients.filter(c => c.automation.priority === 'Высокий' && c.status !== 'Закрыт').length;
@@ -892,6 +980,16 @@ function App() {
     });
   }
 
+  function jumpToClient(clientId) {
+    const client = clients.find(item => item.id === clientId);
+    if (!client) return;
+    setExpanded(clientId);
+    setNoteDrafts(prev => (clientId in prev ? prev : { ...prev, [clientId]: client.notes || '' }));
+    requestAnimationFrame(() => {
+      document.getElementById(`client-row-${clientId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
+
   return (
     <main className="page">
       {toast && <div className="toast">{toast}</div>}
@@ -1004,6 +1102,74 @@ function App() {
           </form>
         )}
       </section>
+
+      <section className="agenda-panel">
+        <div className="section-title inline-title">
+          <CalendarDays size={18} />
+          <span>Календарь дедлайнов</span>
+          {overdueCount > 0 && <span className="agenda-overdue-pill">⚠ {overdueCount} просрочено</span>}
+        </div>
+
+        {agendaItems.length === 0 ? (
+          <div className="empty side">Открытых дедлайнов нет — можно выдохнуть 😌</div>
+        ) : (
+          <>
+            <div className="agenda-strip">
+              {agendaDayStrip.map(cell => {
+                const isActive = agendaDayFilter && new Date(agendaDayFilter).toDateString() === cell.date.toDateString();
+                return (
+                  <button
+                    key={cell.date.toISOString()}
+                    type="button"
+                    className={`agenda-day agenda-day-${cell.bucket} ${isActive ? 'active' : ''}`}
+                    onClick={() => setAgendaDayFilter(current => (
+                      current && new Date(current).toDateString() === cell.date.toDateString() ? null : cell.date
+                    ))}
+                    title={`${cell.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}: ${cell.count} задач`}
+                  >
+                    <span className="agenda-day-bar" style={{ '--count': String(Math.min(cell.count, 6)) }} />
+                    <span className="agenda-day-num">{cell.date.getDate()}</span>
+                    <span className="agenda-day-name">{cell.date.toLocaleDateString('ru-RU', { weekday: 'short' })}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {agendaDayFilter && (
+              <button type="button" className="btn-ghost compact agenda-clear-filter" onClick={() => setAgendaDayFilter(null)}>
+                <X size={13} />
+                <span>Показать все дни</span>
+              </button>
+            )}
+
+            <div className="agenda-groups">
+              {agendaGroups.filter(group => group.items.length).map(group => (
+                <div key={group.key} className={`agenda-group agenda-group-${group.key}`}>
+                  <div className="agenda-group-title">
+                    <group.icon size={15} />
+                    <span>{group.label}</span>
+                    <strong>{group.items.length}</strong>
+                  </div>
+                  {group.items.map(item => (
+                    <button key={item.id} type="button" className="agenda-item" onClick={() => jumpToClient(item.clientId)}>
+                      <span className="avatar">{item.clientName[0]}</span>
+                      <span className="agenda-item-body">
+                        <strong>{item.title}</strong>
+                        <small>{item.clientName} · {item.categoryTitle}</small>
+                      </span>
+                      <span className={`agenda-item-due ${item.hoursLeft < 0 ? 'overdue' : ''}`}>{relativeDueLabel(item.dueAt, now)}</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+              {visibleAgendaItems.length === 0 && agendaDayFilter && (
+                <div className="empty side">На этот день дедлайнов нет</div>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+
       <section className="workspace">
         <div className="left-pane">
           <div className="toolbar">
@@ -1102,7 +1268,7 @@ function App() {
                     const nearestTask = nearestOpenTask(client.tasks) || client.tasks[0];
                     return (
                       <React.Fragment key={client.id}>
-                        <tr className={expanded === client.id ? 'row-expanded' : ''} onClick={() => toggleExpanded(client)}>
+                        <tr id={`client-row-${client.id}`} className={expanded === client.id ? 'row-expanded' : ''} onClick={() => toggleExpanded(client)}>
                           <td data-label="Клиент">
                             <div className="client-name">
                               <span className="avatar">{client.name[0]}</span>
