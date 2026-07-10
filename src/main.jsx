@@ -883,22 +883,6 @@ function App() {
         </div>
       </header>
 
-      <section className="metrics-grid">
-        <MetricCard label="Воронка" value={clients.length} hint="клиентов в базе" />
-        <MetricCard label="В работе" value={inAutomation} hint="активных дел" />
-        <MetricCard label="Срочно" value={urgentCount} hint="нужен быстрый ответ" />
-        <div className="demo-runner">
-          <div>
-            <span>Сценарий</span>
-            <strong>Новый кейс → задачи → дедлайн → Telegram</strong>
-          </div>
-          <button className="btn-dark" onClick={runDemoScenario} disabled={savingId === 'create'}>
-            <Play size={16} />
-            <span>Запустить демо</span>
-          </button>
-        </div>
-      </section>
-
       {settingsOpen && (
         <section className="settings-panel">
           <div className="section-title">
@@ -927,6 +911,22 @@ function App() {
           )}
         </section>
       )}
+
+      <section className="metrics-grid">
+        <MetricCard label="Воронка" value={clients.length} hint="клиентов в базе" />
+        <MetricCard label="В работе" value={inAutomation} hint="активных дел" />
+        <MetricCard label="Срочно" value={urgentCount} hint="нужен быстрый ответ" />
+        <div className="demo-runner">
+          <div>
+            <span>Сценарий</span>
+            <strong>Новый кейс → задачи → дедлайн → Telegram</strong>
+          </div>
+          <button className="btn-dark" onClick={runDemoScenario} disabled={savingId === 'create'}>
+            <Play size={16} />
+            <span>Запустить демо</span>
+          </button>
+        </div>
+      </section>
 
       <section className="category-panel">
         <div className="section-title inline-title">
