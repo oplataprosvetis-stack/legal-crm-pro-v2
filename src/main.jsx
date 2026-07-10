@@ -19,9 +19,26 @@ function load() { try { const s = localStorage.getItem('lcrm-v2'); return s ? JS
 function loadTg() { try { return JSON.parse(localStorage.getItem('lcrm-tg') || 'null'); } catch { return null; } }
 function fmt(iso) { return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }); }
 
+function extractPhoneDigits(raw) {
+  let digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('8')) digits = '7' + digits.slice(1);
+  if (digits.startsWith('7')) digits = digits.slice(1);
+  return digits.slice(0, 10);
+}
+function formatPhoneDigits(digits) {
+  let out = '+7';
+  if (digits.length > 0) out += '(' + digits.slice(0, 3);
+  if (digits.length >= 3) out += ')';
+  if (digits.length > 3) out += '-' + digits.slice(3, 6);
+  if (digits.length > 6) out += '-' + digits.slice(6, 8);
+  if (digits.length > 8) out += '-' + digits.slice(8, 10);
+  return out;
+}
+function formatPhone(raw) { return formatPhoneDigits(extractPhoneDigits(raw)); }
+
 function App() {
   const [clients, setClients]   = React.useState(load);
-  const [form, setForm]         = React.useState({ name: '', phone: '', status: 'Новый', notes: '' });
+  const [form, setForm]         = React.useState({ name: '', phone: '+7', status: 'Новый', notes: '' });
   const [filter, setFilter]     = React.useState('Все');
   const [search, setSearch]     = React.useState('');
   const [toast, setToast]       = React.useState('');
@@ -31,9 +48,14 @@ function App() {
   const [tgUser, setTgUser]     = React.useState(loadTg);   // { username, chatId, firstName }
   const [tgInput, setTgInput]   = React.useState('');
   const [tgStatus, setTgStatus] = React.useState('idle');   // idle | loading | ok | error | not_found
+  const phoneRef = React.useRef(null);
 
   React.useEffect(() => { localStorage.setItem('lcrm-v2', JSON.stringify(clients)); }, [clients]);
   React.useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 2800); return () => clearTimeout(t); }, [toast]);
+  React.useEffect(() => {
+    const el = phoneRef.current;
+    if (el === document.activeElement) el.setSelectionRange(el.value.length, el.value.length);
+  }, [form.phone]);
 
   const counts = STATUSES.reduce((a, s) => ({ ...a, [s]: clients.filter(c => c.status === s).length }), { 'Все': clients.length });
   const visible = clients.filter(c => {
@@ -45,9 +67,9 @@ function App() {
   async function addClient(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
-    const client = { id: uid(), ...form, name: form.name.trim(), phone: form.phone.trim(), createdAt: new Date().toISOString() };
+    const client = { id: uid(), ...form, name: form.name.trim(), phone: form.phone === '+7' ? '' : form.phone, createdAt: new Date().toISOString() };
     setClients(prev => [client, ...prev]);
-    setForm({ name: '', phone: '', status: 'Новый', notes: '' });
+    setForm({ name: '', phone: '+7', status: 'Новый', notes: '' });
     setFormOpen(false);
     setToast(`Клиент "${client.name}" добавлен`);
     notifyTelegram(client);
@@ -112,11 +134,12 @@ function App() {
         </div>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>
           <button
-            className={`btn-icon-header ${tgUser ? 'tg-connected' : ''}`}
+            className={`btn-tg-toggle ${tgUser ? 'tg-connected' : ''}`}
             onClick={() => setSettingsOpen(o => !o)}
-            title="Настройки уведомлений"
+            title="Настройки Telegram-уведомлений"
           >
-            {tgUser ? '🔔' : '🔕'}
+            <span className="btn-tg-icon">{tgUser ? '🔔' : '📲'}</span>
+            {tgUser ? `@${tgUser.username}` : 'Подключить уведомления'}
           </button>
           <button className="btn-primary" onClick={() => setFormOpen(o => !o)}>
             {formOpen ? '✕ Закрыть' : '+ Добавить клиента'}
@@ -192,7 +215,19 @@ function App() {
             </div>
             <div className="field">
               <label>Телефон</label>
-              <input placeholder="+7 900 000-00-00" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+              <input
+                ref={phoneRef}
+                placeholder="+7(900)-000-00-00"
+                value={form.phone}
+                onChange={e => setForm({ ...form, phone: formatPhone(e.target.value) })}
+                onKeyDown={e => {
+                  if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+                  e.preventDefault();
+                  setForm(f => ({ ...f, phone: formatPhoneDigits(extractPhoneDigits(f.phone).slice(0, -1)) }));
+                }}
+                onFocus={e => { const v = e.target.value; requestAnimationFrame(() => e.target.setSelectionRange(v.length, v.length)); }}
+                inputMode="tel"
+              />
             </div>
             <div className="field field-sm">
               <label>Статус</label>

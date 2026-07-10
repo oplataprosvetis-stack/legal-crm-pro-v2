@@ -315,18 +315,24 @@ textarea {
 }
 
 /* Settings panel */
-.btn-icon-header {
-  width: 36px; height: 36px;
-  border: 1px solid #e5e7eb;
+.btn-tg-toggle {
+  height: 36px;
+  border: 1px solid #bfdbfe;
   border-radius: 10px;
-  background: #fff;
+  background: #eff6ff;
+  color: #1d4ed8;
   cursor: pointer;
-  font-size: 16px;
-  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 14px;
+  display: flex; align-items: center; gap: 6px;
+  white-space: nowrap;
   transition: all .15s;
 }
-.btn-icon-header:hover { border-color: #9ca3af; }
-.btn-icon-header.tg-connected { background: #f0fdf4; border-color: #bbf7d0; }
+.btn-tg-icon { font-size: 16px; line-height: 1; }
+.btn-tg-toggle:hover { border-color: #93c5fd; background: #dbeafe; }
+.btn-tg-toggle.tg-connected { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+.btn-tg-toggle.tg-connected:hover { background: #dcfce7; }
 
 .settings-panel {
   background: #fff;
