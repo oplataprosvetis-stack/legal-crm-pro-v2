@@ -136,7 +136,11 @@ function App() {
           ) : (
             <div className="tg-connect-form">
               <p className="tg-hint">
-                1. Напишите любое сообщение боту <strong>@dostupnoe_pravo_bot</strong> в Telegram<br/>
+                1. Напишите любое сообщение боту{' '}
+                <a href="https://t.me/dostupnoe_pravo_bot" target="_blank" rel="noopener noreferrer" className="tg-bot-link">
+                  @dostupnoe_pravo_bot
+                </a>{' '}
+                в Telegram<br/>
                 2. Введите ваш @логин ниже и нажмите «Подключить»
               </p>
               <div className="tg-input-row">
